@@ -13,6 +13,7 @@ export default function App() {
     isLoadingList,
     activeId,
     activeSession,
+    activeTitle,
     isLoadingActive,
     isAsking,
     isUploading,
@@ -93,7 +94,7 @@ export default function App() {
 
         {activeId && (
           <ChatScreen
-            title={activeSession?.title ?? "New conversation"}
+            title={activeTitle ?? "New conversation"}
             documents={activeSession?.documents ?? []}
             messages={activeSession?.messages ?? []}
             isLoadingActive={isLoadingActive}

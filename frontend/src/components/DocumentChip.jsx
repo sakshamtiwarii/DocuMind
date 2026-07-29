@@ -1,4 +1,5 @@
 import clsx from "clsx";
+import { shortenFilename } from "../lib/format";
 
 const STATUS = {
   processing: { tone: "bg-ochre", label: "indexing" },
@@ -20,11 +21,10 @@ export default function DocumentChip({ filename, status, pageCount }) {
       <span className={clsx("mb-px size-1.5 shrink-0 self-center rounded-full", tone)} />
       <span
         className={clsx(
-          "max-w-[13rem] truncate",
           status === "failed" ? "text-oxblood line-through decoration-1" : "text-muted"
         )}
       >
-        {filename}
+        {shortenFilename(filename, 32)}
       </span>
       {label && <span className="label shrink-0 text-faint">{label}</span>}
     </span>

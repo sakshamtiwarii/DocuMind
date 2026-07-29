@@ -1,5 +1,6 @@
 import clsx from "clsx";
 import Wordmark from "./Wordmark";
+import { shortenFilename } from "../lib/format";
 import { IconClose, IconPlus, IconTrash } from "./icons";
 
 const DAY_MS = 86400000;
@@ -32,15 +33,6 @@ function formatTime(isoString) {
     return d.toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit" });
   }
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
-}
-
-/** Keeps the start and the extension legible instead of lopping off ".pdf". */
-function shortenFilename(name, max = 26) {
-  if (name.length <= max) return name;
-  const dot = name.lastIndexOf(".");
-  if (dot < 1) return `${name.slice(0, max - 1)}…`;
-  const ext = name.slice(dot);
-  return `${name.slice(0, max - ext.length - 1)}…${ext}`;
 }
 
 function subtitleOf(documents) {
@@ -145,7 +137,7 @@ export default function Sidebar({
                                 isActive ? "text-ink" : "text-muted group-hover:text-ink"
                               )}
                             >
-                              {c.title}
+                              {c.title ?? "New conversation"}
                             </p>
                             <p className="mt-0.5 truncate text-[0.6875rem] text-faint">
                               {subtitleOf(c.documents)} · {formatTime(c.updated_at)}
@@ -155,12 +147,13 @@ export default function Sidebar({
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
-                              if (window.confirm(`Delete "${c.title}"? This can't be undone.`)) {
+                              const label = c.title ?? "this conversation";
+                              if (window.confirm(`Delete "${label}"? This can't be undone.`)) {
                                 onDelete(c.id);
                               }
                             }}
                             className="mt-0.5 shrink-0 p-0.5 text-faint opacity-0 transition-opacity hover:text-oxblood focus-visible:opacity-100 group-hover:opacity-100"
-                            aria-label={`Delete ${c.title}`}
+                            aria-label={`Delete ${c.title ?? "conversation"}`}
                           >
                             <IconTrash size={14} />
                           </button>

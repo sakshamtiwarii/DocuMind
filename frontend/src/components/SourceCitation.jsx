@@ -36,7 +36,7 @@ export default function SourceCitation({ sources }) {
                   {showFilename && source.filename ? `${source.filename} · ` : ""}
                   page {source.page_number}
                 </p>
-                <p className="mt-1.5 border-l border-rule pl-3 font-serif text-[0.9375rem] italic leading-relaxed text-muted">
+                <p className="mt-1.5 line-clamp-4 border-l border-rule pl-3 font-serif text-[0.9375rem] italic leading-relaxed text-muted">
                   {source.chunk_text}
                 </p>
               </div>

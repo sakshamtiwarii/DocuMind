@@ -43,7 +43,7 @@ def test_attach_document_is_idempotent_and_leaves_title_unset(client, empty_sess
 
     # Attaching must NOT name the conversation — the title comes from the first question.
     detail = client.get(f"/sessions/{empty_session}")
-    assert detail.json()["title"] == "New chat"
+    assert detail.json()["title"] is None
 
     # Re-attaching the same document is a no-op, not a duplicate row / error.
     again = client.post(f"/sessions/{empty_session}/documents", json={"document_id": ready_document})

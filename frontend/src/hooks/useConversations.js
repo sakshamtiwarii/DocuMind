@@ -204,11 +204,17 @@ export function useConversations() {
     [activeId, loadConversation, refreshList]
   );
 
+  // The list is refetched after every answer, and the backend names a conversation from its
+  // first question — so read the title from the list to pick that up without another fetch.
+  const activeTitle =
+    conversations.find((c) => c.id === activeId)?.title ?? activeSession?.title ?? null;
+
   return {
     conversations,
     isLoadingList,
     activeId,
     activeSession,
+    activeTitle,
     isLoadingActive,
     isAsking,
     isUploading,

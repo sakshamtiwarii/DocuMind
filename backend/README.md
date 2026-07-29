@@ -55,35 +55,45 @@ uvicorn app.main:app --reload --port 8000
 
 ## API
 
+A session is a *conversation*, not a single-document pairing — it can hold zero or more
+documents, attached independently of asking questions.
+
 | Method | Path | Purpose |
 |---|---|---|
 | GET | `/health` | API + Qdrant + Postgres connectivity check |
 | POST | `/documents` | Upload a PDF; ingestion runs in the background |
 | GET | `/documents/{id}` | Check ingestion status (`processing` \| `ready` \| `failed`) |
-| POST | `/sessions` | Start a new Q&A session tied to a document |
-| GET | `/sessions/{id}/messages` | Retrieve a session's full chat history |
-| POST | `/ask` | Ask a question within a session |
+| POST | `/sessions` | Start a new, empty conversation |
+| GET | `/sessions` | List all conversations (sidebar), most recently active first |
+| GET | `/sessions/{id}` | Full detail: title, attached documents, full message history |
+| POST | `/sessions/{id}/documents` | Attach a document to a conversation (idempotent) |
+| DELETE | `/sessions/{id}` | Delete a conversation and its messages/attachments |
+| POST | `/ask` | Ask a question grounded in the conversation's attached documents |
 
-**Typical flow:** `POST /documents` → poll `GET /documents/{id}` until `status: "ready"` →
-`POST /sessions` with the `document_id` → `POST /ask` any number of times with that
-`session_id` for a multi-turn conversation.
+**Typical flow:** `POST /sessions` (empty conversation) → `POST /documents` to upload each
+PDF, poll `GET /documents/{id}` until `status: "ready"`, then `POST /sessions/{id}/documents`
+to attach it → `POST /ask` any number of times with that `session_id`. Documents can be
+attached before, during, or between questions — `/ask` only requires that *at least one*
+attached document is `ready`, not all of them.
 
 `POST /ask` request/response:
 ```jsonc
 // Request
-{ "document_id": "...", "session_id": "...", "question": "What is the termination clause?" }
+{ "session_id": "...", "question": "What is the termination clause?" }
 
 // Response
 {
   "answer": "The contract can be terminated with 30 days written notice...",
-  "sources": [{ "page_number": 4, "chunk_text": "Either party may terminate..." }],
+  "sources": [{ "page_number": 4, "chunk_text": "Either party may terminate...", "filename": null }],
   "session_id": "..."
 }
 ```
+`sources[].filename` is only populated when a conversation has more than one attached
+document, so single-PDF answers stay uncluttered.
 
-Error responses: `400` invalid input / non-PDF upload, `404` unknown document or session,
-`409` question asked before ingestion finishes, `422` document failed ingestion (e.g.
-scanned/no extractable text), `502` upstream OpenAI failure, `503` Qdrant unreachable.
+Error responses: `400` invalid input, non-PDF upload, malformed UUID, or no ready document
+attached yet; `404` unknown document or session; `502` upstream OpenAI failure; `503`
+Qdrant unreachable.
 
 ## Testing
 
@@ -105,7 +115,8 @@ backend/
 │   ├── core/                # RAG pipeline: ingestion, chunking, embeddings,
 │   │                        #   retriever, prompts, chain (answer generation)
 │   ├── db/postgres.py       # SQLAlchemy engine/session
-│   └── models/               # Document, ChatSession, Message ORM models
+│   ├── models/               # Document, ChatSession, SessionDocument, Message ORM models
+│   └── schemas/schemas.py   # Pydantic request/response models
 ├── tests/
 ├── Dockerfile
 ├── docker-compose.yml

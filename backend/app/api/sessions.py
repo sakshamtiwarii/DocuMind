@@ -69,7 +69,9 @@ async def list_sessions():
             results.append(
                 {
                     "id": str(session.id),
-                    "title": session.title or "New chat",
+                    # Nullable on purpose — display wording for an unnamed conversation is
+                    # the client's call, not the API's.
+                    "title": session.title,
                     "created_at": session.created_at.isoformat(),
                     "updated_at": activity.isoformat(),
                     "documents": _document_summaries(db, session.id),
@@ -105,7 +107,7 @@ async def get_session(session_id: str):
 
         return {
             "id": str(session.id),
-            "title": session.title or "New chat",
+            "title": session.title,
             "created_at": session.created_at.isoformat(),
             "documents": _document_summaries(db, session.id),
             "messages": [
