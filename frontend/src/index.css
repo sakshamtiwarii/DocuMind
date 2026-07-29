@@ -1,9 +1,142 @@
 @import "tailwindcss";
 
+/* ---------------------------------------------------------------------------
+   Paper & clay — a print-inspired palette. Flat pigments only: no gradients,
+   no coloured glow shadows, no violet. Depth comes from hairline rules and
+   two paper tones, the way it would on a real printed page.
+
+   Colour tokens are indirected through --c-* so light/dark is one media query
+   instead of a `dark:` variant on every element.
+   --------------------------------------------------------------------------- */
+
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Source Serif 4", ui-serif, Georgia, Cambria, serif;
+
+  --color-paper: var(--c-paper);
+  --color-raised: var(--c-raised);
+  --color-ink: var(--c-ink);
+  --color-muted: var(--c-muted);
+  --color-faint: var(--c-faint);
+  --color-rule: var(--c-rule);
+  --color-rule-strong: var(--c-rule-strong);
+  --color-clay: var(--c-clay);
+  --color-clay-tint: var(--c-clay-tint);
+  --color-moss: var(--c-moss);
+  --color-ochre: var(--c-ochre);
+  --color-oxblood: var(--c-oxblood);
+}
+
+:root {
+  --c-paper: #faf7f2;
+  --c-raised: #f4efe6;
+  --c-ink: #1b1917;
+  --c-muted: #6e675e;
+  --c-faint: #9c9488;
+  --c-rule: #e5ded2;
+  --c-rule-strong: #d3c9b9;
+  --c-clay: #a6533a;
+  --c-clay-tint: #f0e3db;
+  --c-moss: #5a6b4e;
+  --c-ochre: #b8873b;
+  --c-oxblood: #8c3a2e;
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --c-paper: #15130f;
+    --c-raised: #1c1915;
+    --c-ink: #ece7de;
+    --c-muted: #9d9488;
+    --c-faint: #726a5f;
+    --c-rule: #2c2822;
+    --c-rule-strong: #3d372f;
+    --c-clay: #c9825f;
+    --c-clay-tint: #2a1d17;
+    --c-moss: #90a47c;
+    --c-ochre: #cfa45f;
+    --c-oxblood: #cf7a68;
+    color-scheme: dark;
+  }
+}
+
+html,
+body {
+  /* The shell is a fixed h-screen layout with its own scroll regions; without
+     this, trackpad momentum still rubber-bands the whole page on macOS. */
+  overscroll-behavior-y: none;
 }
 
 body {
-  @apply antialiased;
+  background-color: var(--c-paper);
+  color: var(--c-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+::selection {
+  background-color: var(--c-clay-tint);
+  color: var(--c-ink);
+}
+
+:focus-visible {
+  outline: 1px solid var(--c-clay);
+  outline-offset: 2px;
+}
+
+/* Quiet, thin scrollbars — the chrome shouldn't compete with the text. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--c-rule-strong) transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 9px;
+  height: 9px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background-color: var(--c-rule-strong);
+  border: 3px solid transparent;
+  background-clip: content-box;
+  border-radius: 9999px;
+}
+
+/* Small letterspaced sans labels — the only place uppercase is used. */
+.label {
+  font-family: var(--font-sans);
+  font-size: 0.6875rem;
+  font-weight: 500;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+/* "Reading…" indicator: three fading dots, no spinner, no gradient. */
+.thinking-dot {
+  animation: thinking 1.4s ease-in-out infinite;
+}
+.thinking-dot:nth-child(2) {
+  animation-delay: 0.18s;
+}
+.thinking-dot:nth-child(3) {
+  animation-delay: 0.36s;
+}
+
+@keyframes thinking {
+  0%,
+  100% {
+    opacity: 0.2;
+  }
+  50% {
+    opacity: 0.9;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .thinking-dot {
+    animation: none;
+    opacity: 0.6;
+  }
 }

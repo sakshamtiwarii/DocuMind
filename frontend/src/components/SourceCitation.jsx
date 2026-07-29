@@ -1,38 +1,48 @@
 import { useState } from "react";
-import { ChevronDown, FileText } from "lucide-react";
 import clsx from "clsx";
+import { IconChevron } from "./icons";
 
+/** Citations as footnotes: a short rule, a quiet toggle, then numbered references. */
 export default function SourceCitation({ sources }) {
   const [open, setOpen] = useState(false);
 
   if (!sources?.length) return null;
 
+  // Only name the file when the citations actually span more than one document —
+  // otherwise it's noise on a single-PDF conversation.
+  const distinctFilenames = new Set(sources.map((s) => s.filename).filter(Boolean));
+  const showFilename = distinctFilenames.size > 1;
+
   return (
-    <div className="mt-3 border-t border-slate-100 pt-3 dark:border-slate-800">
+    <div className="mt-5 max-w-[64ch]">
+      <div className="mb-3 h-px w-10 bg-rule-strong" />
+
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
-        className="flex items-center gap-1.5 text-xs font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400"
+        className="label flex items-center gap-1.5 text-muted transition-colors hover:text-clay"
       >
-        <FileText className="h-3.5 w-3.5" />
         {sources.length} source{sources.length > 1 ? "s" : ""}
-        <ChevronDown className={clsx("h-3.5 w-3.5 transition-transform", open && "rotate-180")} />
+        <IconChevron size={13} className={clsx("transition-transform", open && "rotate-180")} />
       </button>
 
       {open && (
-        <ul className="mt-2 flex flex-col gap-2">
+        <ol className="mt-4 flex flex-col gap-4">
           {sources.map((source, i) => (
-            <li
-              key={i}
-              className="rounded-lg bg-slate-50 px-3 py-2 text-xs leading-relaxed text-slate-600 dark:bg-slate-800/60 dark:text-slate-300"
-            >
-              <span className="mb-1 inline-block rounded-full bg-indigo-100 px-2 py-0.5 font-medium text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-300">
-                Page {source.page_number}
-              </span>
-              <p className="line-clamp-3">{source.chunk_text}</p>
+            <li key={i} className="flex gap-3">
+              <span className="mt-px w-4 shrink-0 font-serif text-xs text-clay">{i + 1}</span>
+              <div className="min-w-0">
+                <p className="label text-faint">
+                  {showFilename && source.filename ? `${source.filename} · ` : ""}
+                  page {source.page_number}
+                </p>
+                <p className="mt-1.5 border-l border-rule pl-3 font-serif text-[0.9375rem] italic leading-relaxed text-muted">
+                  {source.chunk_text}
+                </p>
+              </div>
             </li>
           ))}
-        </ul>
+        </ol>
       )}
     </div>
   );

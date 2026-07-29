@@ -6,36 +6,51 @@ from sqlalchemy.exc import DataError
 from app.schemas.schemas import AskRequest, AskResponse
 from app.core.chain import answer_question
 from app.db.postgres import SessionLocal
-from app.models import ChatSession, Document, Message
+from app.models import ChatSession, Document, Message, SessionDocument
 
 
 router = APIRouter()
 
+TITLE_MAX_LENGTH = 60
+
+
+def _title_from_question(question: str) -> str:
+    """Collapse a question down to a short, single-line conversation title."""
+    cleaned = " ".join(question.split())
+    if len(cleaned) <= TITLE_MAX_LENGTH:
+        return cleaned
+    # Prefer cutting at a word boundary rather than mid-word.
+    trimmed = cleaned[:TITLE_MAX_LENGTH].rsplit(" ", 1)[0].rstrip(",;:.- ")
+    return f"{trimmed or cleaned[:TITLE_MAX_LENGTH]}…"
+
+
 @router.post("/ask", response_model=AskResponse)
 async def ask(payload: AskRequest):
     """
-    Ask a question based on the context of a specific document.
+    Ask a question grounded in the documents attached to this conversation.
     """
     db = SessionLocal()
     try:
-        try:
-            document = db.query(Document).filter(Document.id == payload.document_id).first()
-        except DataError:
-            raise HTTPException(status_code=400, detail="Invalid document_id format")
-
-        if not document:
-            raise HTTPException(status_code=404, detail="Document not found")
-        if document.status == "processing":
-            raise HTTPException(status_code=409, detail="Document is still processing")
-        if document.status == "failed":
-            raise HTTPException(status_code=422, detail="Document processing failed; please re-upload")
-
         try:
             session = db.query(ChatSession).filter(ChatSession.id == payload.session_id).first()
         except DataError:
             raise HTTPException(status_code=400, detail="Invalid session_id format")
         if not session:
             raise HTTPException(status_code=404, detail="Session not found")
+
+        ready_documents = (
+            db.query(Document.id, Document.filename)
+            .join(SessionDocument, SessionDocument.document_id == Document.id)
+            .filter(SessionDocument.session_id == payload.session_id, Document.status == "ready")
+            .all()
+        )
+        if not ready_documents:
+            raise HTTPException(
+                status_code=400,
+                detail="Attach at least one processed PDF before asking questions.",
+            )
+        document_filenames = {str(doc_id): filename for doc_id, filename in ready_documents}
+        ready_document_ids = list(document_filenames.keys())
 
         prior_messages = (
             db.query(Message)
@@ -46,7 +61,7 @@ async def ask(payload: AskRequest):
         chat_history = [{"role": m.role, "content": m.content} for m in prior_messages]
 
         try:
-            result = answer_question(payload.question, payload.document_id, chat_history)
+            result = answer_question(payload.question, ready_document_ids, chat_history, document_filenames)
         except (ResponseHandlingException, UnexpectedResponse) as e:
             raise HTTPException(status_code=503, detail="Vector database is unreachable") from e
         except OpenAIError as e:
@@ -59,6 +74,12 @@ async def ask(payload: AskRequest):
             content=result["answer"],
             sources=result["sources"],
         ))
+
+        # Name the conversation after the question that started it — filenames repeat across
+        # conversations and make the sidebar unreadable.
+        if not session.title:
+            session.title = _title_from_question(payload.question)
+
         db.commit()
     finally:
         db.close()

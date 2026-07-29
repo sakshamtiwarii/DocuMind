@@ -8,7 +8,7 @@ from sqlalchemy import text
 from app.api import ask, documents, sessions
 from app.config import settings
 from app.db.postgres import Base, engine
-from app.models import ChatSession, Document, Message  # noqa: F401 — registers models on Base
+from app.models import ChatSession, Document, Message, SessionDocument  # noqa: F401 — registers models on Base
 
 
 @asynccontextmanager

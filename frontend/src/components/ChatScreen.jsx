@@ -1,11 +1,33 @@
 import { useEffect, useRef, useState } from "react";
-import { Bot, FileText, Plus, Send } from "lucide-react";
-import MessageBubble from "./MessageBubble";
+import clsx from "clsx";
+import DocumentChip from "./DocumentChip";
+import Dropzone from "./Dropzone";
+import Message from "./Message";
 import Spinner from "./Spinner";
+import { IconPanel, IconPlus } from "./icons";
 
-export default function ChatScreen({ document, messages, isAsking, onSend, onNewDocument }) {
+const SUGGESTIONS = [
+  "What is this document about?",
+  "Summarise the main points.",
+  "What does it recommend, and why?",
+];
+
+export default function ChatScreen({
+  title,
+  documents,
+  messages,
+  isLoadingActive,
+  isAsking,
+  isUploading,
+  onSend,
+  onAddDocument,
+  onOpenSidebar,
+}) {
   const [input, setInput] = useState("");
   const bottomRef = useRef(null);
+  const fileInputRef = useRef(null);
+
+  const hasReadyDocument = documents.some((d) => d.status === "ready");
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -13,90 +35,180 @@ export default function ChatScreen({ document, messages, isAsking, onSend, onNew
 
   function handleSubmit(e) {
     e.preventDefault();
-    if (!input.trim() || isAsking) return;
+    if (!input.trim() || isAsking || !hasReadyDocument) return;
     onSend(input);
     setInput("");
   }
 
+  if (isLoadingActive) {
+    return (
+      <div className="flex flex-1 items-center justify-center">
+        <Spinner className="size-5 text-clay" />
+      </div>
+    );
+  }
+
   return (
-    <div className="mx-auto flex min-h-screen w-full max-w-3xl flex-col px-4">
-      <header className="sticky top-0 z-10 flex items-center justify-between gap-3 border-b border-slate-200 bg-slate-50/80 py-4 backdrop-blur dark:border-slate-800 dark:bg-slate-950/80">
-        <div className="flex min-w-0 items-center gap-3">
-          <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-indigo-600 text-white">
-            <FileText className="h-4.5 w-4.5" />
-          </div>
-          <div className="min-w-0">
-            <p className="truncate text-sm font-medium text-slate-900 dark:text-white">
-              {document?.filename}
-            </p>
-            {document?.page_count != null && (
-              <p className="text-xs text-slate-400">{document.page_count} pages</p>
-            )}
-          </div>
+    <div className="mx-auto flex w-full max-w-[46rem] flex-1 flex-col overflow-hidden px-6 sm:px-10">
+      <header className="shrink-0 border-b border-rule py-5">
+        <div className="flex items-center gap-3">
+          <button
+            type="button"
+            onClick={onOpenSidebar}
+            className="-ml-1 p-1 text-muted transition-colors hover:text-ink md:hidden"
+            aria-label="Show conversations"
+          >
+            <IconPanel size={18} />
+          </button>
+
+          <h1 className="min-w-0 flex-1 truncate font-serif text-[1.0625rem] font-medium text-ink">
+            {title}
+          </h1>
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept="application/pdf"
+            className="sr-only"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) onAddDocument(file);
+              e.target.value = "";
+            }}
+          />
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={isUploading}
+            className="flex shrink-0 items-center gap-1.5 text-[0.8125rem] text-muted transition-colors hover:text-clay disabled:opacity-50"
+          >
+            {isUploading ? <Spinner className="size-3.5" /> : <IconPlus size={14} />}
+            Add PDF
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={onNewDocument}
-          className="flex shrink-0 items-center gap-1.5 rounded-xl border border-slate-200 bg-white px-3 py-2 text-xs font-medium text-slate-600 shadow-sm transition-colors hover:bg-slate-50 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-300 dark:hover:bg-slate-800"
-        >
-          <Plus className="h-3.5 w-3.5" />
-          New document
-        </button>
+
+        {documents.length > 0 && (
+          <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-1.5">
+            {documents.map((d) => (
+              <DocumentChip
+                key={d.id}
+                filename={d.filename}
+                status={d.status}
+                pageCount={d.page_count}
+              />
+            ))}
+          </div>
+        )}
       </header>
 
-      <div className="flex-1 space-y-5 py-6">
-        {messages.length === 0 && (
-          <div className="flex flex-col items-center justify-center gap-3 py-16 text-center text-slate-400">
-            <Bot className="h-8 w-8" />
-            <p className="max-w-xs text-sm">
-              Ask anything about this document — answers are grounded in its content, with
-              page citations.
+      <div className="flex-1 overflow-y-auto overscroll-contain py-10">
+        {documents.length === 0 && (
+          <div className="pl-5">
+            <p className="max-w-[40ch] font-serif text-[1.375rem] leading-snug text-ink">
+              Add a PDF to begin this conversation.
             </p>
+            <p className="mt-3 max-w-[52ch] text-[0.875rem] leading-relaxed text-muted">
+              Everything you ask will be answered from inside the document, with the page it
+              came from.
+            </p>
+            <div className="mt-8">
+              <Dropzone
+                onFile={onAddDocument}
+                subtext={isUploading ? "Uploading…" : "or click to choose a file"}
+                disabled={isUploading}
+              />
+            </div>
+          </div>
+        )}
+
+        {documents.length > 0 && messages.length === 0 && (
+          <div className="pl-5">
+            <p className="max-w-[40ch] font-serif text-[1.375rem] leading-snug text-ink">
+              Ask anything about {documents.length > 1 ? "these documents" : "this document"}.
+            </p>
+            <p className="mt-3 max-w-[52ch] text-[0.875rem] leading-relaxed text-muted">
+              Answers are drawn only from what's inside, and each one cites the page it came
+              from. Attach more PDFs whenever you like to widen what it can draw on.
+            </p>
+
+            {hasReadyDocument && (
+              <div className="mt-9">
+                <p className="label text-faint">Try asking</p>
+                <ul className="mt-3 space-y-2.5">
+                  {SUGGESTIONS.map((q) => (
+                    <li key={q}>
+                      <button
+                        type="button"
+                        onClick={() => onSend(q)}
+                        className="text-left font-serif text-[1.0625rem] text-clay underline decoration-rule-strong decoration-1 underline-offset-4 transition-colors hover:decoration-clay"
+                      >
+                        {q}
+                      </button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </div>
         )}
 
         {messages.map((m, i) => (
-          <MessageBubble key={i} role={m.role} content={m.content} sources={m.sources} />
+          <div key={i} className={m.role === "user" ? (i === 0 ? "" : "mt-12") : "mt-5"}>
+            <Message role={m.role} content={m.content} sources={m.sources} />
+          </div>
         ))}
 
         {isAsking && (
-          <div className="flex items-center gap-3">
-            <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-slate-200 text-slate-600 dark:bg-slate-700 dark:text-slate-300">
-              <Bot className="h-4 w-4" />
-            </div>
-            <div className="flex items-center gap-2 rounded-2xl rounded-tl-sm border border-slate-200 bg-white px-4 py-3 shadow-sm dark:border-slate-800 dark:bg-slate-900">
-              <Spinner className="h-3.5 w-3.5 text-slate-400" />
-              <span className="text-xs text-slate-400">Thinking…</span>
-            </div>
+          <div className="mt-5 flex items-center gap-2 pl-5">
+            <span className="label text-faint">Reading</span>
+            <span className="flex items-center gap-1">
+              <span className="thinking-dot size-1 rounded-full bg-faint" />
+              <span className="thinking-dot size-1 rounded-full bg-faint" />
+              <span className="thinking-dot size-1 rounded-full bg-faint" />
+            </span>
           </div>
         )}
         <div ref={bottomRef} />
       </div>
 
-      <form
-        onSubmit={handleSubmit}
-        className="sticky bottom-0 flex items-end gap-2 border-t border-slate-200 bg-slate-50/80 py-4 backdrop-blur dark:border-slate-800 dark:bg-slate-950/80"
-      >
-        <textarea
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter" && !e.shiftKey) {
-              e.preventDefault();
-              handleSubmit(e);
+      <form onSubmit={handleSubmit} className="shrink-0 border-t border-rule py-4">
+        <div className="flex items-end gap-4">
+          <textarea
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter" && !e.shiftKey) {
+                e.preventDefault();
+                handleSubmit(e);
+              }
+            }}
+            disabled={!hasReadyDocument}
+            placeholder={
+              hasReadyDocument
+                ? "Ask a question…"
+                : "Add a PDF and let it finish indexing to start asking"
             }
-          }}
-          placeholder="Ask a question about this document…"
-          rows={1}
-          className="flex-1 resize-none rounded-2xl border border-slate-200 bg-white px-4 py-3 text-sm text-slate-800 shadow-sm outline-none placeholder:text-slate-400 focus:border-indigo-400 focus:ring-2 focus:ring-indigo-100 dark:border-slate-700 dark:bg-slate-900 dark:text-slate-100 dark:focus:ring-indigo-950"
-        />
-        <button
-          type="submit"
-          disabled={!input.trim() || isAsking}
-          className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-indigo-600 text-white shadow-sm shadow-indigo-600/30 transition-colors hover:bg-indigo-500 disabled:cursor-not-allowed disabled:bg-slate-300 disabled:shadow-none dark:disabled:bg-slate-700"
-        >
-          <Send className="h-4 w-4" />
-        </button>
+            rows={1}
+            className="max-h-40 flex-1 resize-none bg-transparent font-serif text-[1.0625rem] leading-relaxed text-ink outline-none placeholder:text-faint disabled:cursor-not-allowed [field-sizing:content]"
+          />
+          <button
+            type="submit"
+            disabled={!input.trim() || isAsking || !hasReadyDocument}
+            className={clsx(
+              "label shrink-0 pb-1 transition-colors",
+              !input.trim() || isAsking || !hasReadyDocument
+                ? "cursor-not-allowed text-faint"
+                : "text-clay hover:text-ink"
+            )}
+          >
+            Ask
+          </button>
+        </div>
+        {hasReadyDocument && (
+          <p className="mt-2 text-[0.6875rem] text-faint">
+            Enter to send · Shift + Enter for a new line
+          </p>
+        )}
       </form>
     </div>
   );

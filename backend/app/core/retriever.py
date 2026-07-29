@@ -1,22 +1,26 @@
-from qdrant_client.models import FieldCondition, Filter, MatchValue
+from qdrant_client.models import FieldCondition, Filter, MatchAny
 
 from app.config import settings
 from app.core.embeddings import embeddings, qdrant  # reuse the clients already created there
 
 
-def retrieve_chunks(question: str, document_id: str, top_k: int = settings.top_k) -> list[dict]:
+def retrieve_chunks(question: str, document_ids: list[str], top_k: int = settings.top_k) -> list[dict]:
     """
-    Retrieve the top_k most relevant chunks for a given question and document_id.
+    Retrieve the top_k most relevant chunks for a given question, scoped to a set of
+    document_ids (a conversation can have more than one document attached).
     """
+    if not document_ids:
+        return []
+
     # Embed the question
     query_vector = embeddings.embed_query(question)
 
-    # Create a filter to only retrieve chunks from the specified document_id
+    # Create a filter to only retrieve chunks from one of the specified document_ids
     filter_condition = Filter(
         must=[
             FieldCondition(
                 key="document_id",
-                match=MatchValue(value=document_id),
+                match=MatchAny(any=document_ids),
             )
         ]
     )
@@ -35,6 +39,7 @@ def retrieve_chunks(question: str, document_id: str, top_k: int = settings.top_k
             "chunk_text": point.payload["chunk_text"],
             "page_number": point.payload["page_number"],
             "chunk_index": point.payload["chunk_index"],
+            "document_id": point.payload["document_id"],
             "score": point.score,  # Optional: include the similarity score
         }
         for point in search_result

@@ -42,6 +42,14 @@ async function request(path, options = {}) {
   return res.json();
 }
 
+function json(path, body, method = "POST") {
+  return request(path, {
+    method,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+}
+
 export function uploadDocument(file) {
   const formData = new FormData();
   formData.append("file", file);
@@ -52,22 +60,26 @@ export function getDocumentStatus(documentId) {
   return request(`/documents/${documentId}`);
 }
 
-export function createSession(documentId) {
-  return request("/sessions", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ document_id: documentId }),
-  });
+export function createSession() {
+  return request("/sessions", { method: "POST" });
 }
 
-export function getSessionMessages(sessionId) {
-  return request(`/sessions/${sessionId}/messages`);
+export function listSessions() {
+  return request("/sessions");
 }
 
-export function askQuestion(documentId, sessionId, question) {
-  return request("/ask", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ document_id: documentId, session_id: sessionId, question }),
-  });
+export function getSession(sessionId) {
+  return request(`/sessions/${sessionId}`);
+}
+
+export function attachDocument(sessionId, documentId) {
+  return json(`/sessions/${sessionId}/documents`, { document_id: documentId });
+}
+
+export function deleteSession(sessionId) {
+  return request(`/sessions/${sessionId}`, { method: "DELETE" });
+}
+
+export function askQuestion(sessionId, question) {
+  return json("/ask", { session_id: sessionId, question });
 }

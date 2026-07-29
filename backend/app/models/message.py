@@ -15,4 +15,7 @@ class Message(Base):
     role = Column(String, nullable=False)  # 'user' | 'assistant'
     content = Column(Text, nullable=False)
     sources = Column(JSON, nullable=True)  # chunk_ids / page numbers cited
-    created_at = Column(TIMESTAMP(timezone=True), server_default=func.now())
+    # clock_timestamp() (not now()) — now()/CURRENT_TIMESTAMP is the transaction's start
+    # time, so a user+assistant pair inserted in the same commit would get identical values,
+    # making ORDER BY created_at ties undefined between them.
+    created_at = Column(TIMESTAMP(timezone=True), server_default=func.clock_timestamp())

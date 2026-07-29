@@ -1,15 +1,14 @@
 from pydantic import BaseModel
 
 class AskRequest(BaseModel):
-    document_id: str
     session_id: str
     question: str
-    chat_history: list[dict] | None = None
 
 
 class SourceChunk(BaseModel):
     page_number: int
     chunk_text: str
+    filename: str | None = None
 
 
 class AskResponse(BaseModel):
@@ -17,5 +16,5 @@ class AskResponse(BaseModel):
     sources: list[SourceChunk]
     session_id: str
 
-class CreateSessionRequest(BaseModel):
+class AttachDocumentRequest(BaseModel):
     document_id: str

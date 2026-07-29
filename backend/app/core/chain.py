@@ -23,19 +23,33 @@ def contextualize_question(question: str, chat_history: list[dict]) -> str:
     return response.content.strip()
 
 
-def answer_question(question: str, document_id: str, chat_history: list[dict] | None = None) -> dict:
+def answer_question(
+    question: str,
+    document_ids: list[str],
+    chat_history: list[dict] | None = None,
+    document_filenames: dict[str, str] | None = None,
+) -> dict:
     """
-    Answer a question based on the context retrieved from the document.
+    Answer a question based on the context retrieved across all documents attached to
+    the conversation. document_filenames (document_id -> filename) disambiguates context
+    and citations when more than one document is attached — without it, two attached PDFs
+    that both have e.g. a "page 3" would be indistinguishable to the model and to the user.
     """
+    document_filenames = document_filenames or {}
+
     # Resolve references from chat history before embedding, so retrieval targets what the
     # question actually means rather than its literal (possibly pronoun-only) wording.
     search_question = contextualize_question(question, chat_history or [])
 
-    # Retrieve relevant chunks for the (contextualized) question and document_id
-    chunks = retrieve_chunks(search_question, document_id)
+    # Retrieve relevant chunks for the (contextualized) question across the attached documents
+    chunks = retrieve_chunks(search_question, document_ids)
+
+    def label(chunk):
+        filename = document_filenames.get(chunk["document_id"])
+        return f"[{filename}, page {chunk['page_number']}]" if filename else f"[Page {chunk['page_number']}]"
 
     # Prepare the context for the system prompt
-    context = "\n\n".join(f"[Page {chunk['page_number']}] {chunk['chunk_text']}" for chunk in chunks)
+    context = "\n\n".join(f"{label(chunk)} {chunk['chunk_text']}" for chunk in chunks)
 
 
     # Format the system prompt with the retrieved context
@@ -43,16 +57,25 @@ def answer_question(question: str, document_id: str, chat_history: list[dict] | 
 
     # Prepare messages for the LLM
     messages = [{"role": "system", "content": system_prompt}]
-    
+
     if chat_history:
         messages.extend(chat_history[-6:])
-    
+
     messages.append({"role": "user", "content": question})
 
     # Get the answer from the LLM
     response = llm.invoke(messages)
 
+    sources = [
+        {
+            "page_number": chunk["page_number"],
+            "chunk_text": chunk["chunk_text"],
+            "filename": document_filenames.get(chunk["document_id"]),
+        }
+        for chunk in chunks
+    ]
+
     return {
         "answer": response.content,
-        "sources": chunks,
+        "sources": sources,
     }
