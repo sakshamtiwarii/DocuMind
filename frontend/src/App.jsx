@@ -21,8 +21,10 @@ export default function App() {
     selectConversation,
     createNewConversation,
     deleteConversation,
+    renameConversation,
     sendMessage,
     addDocument,
+    removeDocument,
     dismissError,
   } = useConversations();
 
@@ -44,6 +46,7 @@ export default function App() {
           setIsSidebarOpen(false);
         }}
         onDelete={deleteConversation}
+        onRename={renameConversation}
         onClose={() => setIsSidebarOpen(false)}
       />
 
@@ -102,6 +105,8 @@ export default function App() {
             isUploading={isUploading}
             onSend={sendMessage}
             onAddDocument={addDocument}
+            onRemoveDocument={removeDocument}
+            onRename={(nextTitle) => renameConversation(activeId, nextTitle)}
             onOpenSidebar={() => setIsSidebarOpen(true)}
           />
         )}

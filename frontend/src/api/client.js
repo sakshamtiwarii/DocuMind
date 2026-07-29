@@ -76,6 +76,14 @@ export function attachDocument(sessionId, documentId) {
   return json(`/sessions/${sessionId}/documents`, { document_id: documentId });
 }
 
+export function renameSession(sessionId, title) {
+  return json(`/sessions/${sessionId}`, { title }, "PATCH");
+}
+
+export function detachDocument(sessionId, documentId) {
+  return request(`/sessions/${sessionId}/documents/${documentId}`, { method: "DELETE" });
+}
+
 export function deleteSession(sessionId) {
   return request(`/sessions/${sessionId}`, { method: "DELETE" });
 }

@@ -86,18 +86,20 @@ body {
   outline-offset: 2px;
 }
 
-/* Quiet, thin scrollbars — the chrome shouldn't compete with the text. */
-* {
+/* Quiet, thin scrollbars — the chrome shouldn't compete with the text. Applied per scroll
+   region rather than to `*`: on `*` it also makes Chromium paint a thin scrollbar track
+   inside the composer's textarea, which reads as a stray hairline. */
+.scroll-quiet {
   scrollbar-width: thin;
   scrollbar-color: var(--c-rule-strong) transparent;
 }
 
-*::-webkit-scrollbar {
+.scroll-quiet::-webkit-scrollbar {
   width: 9px;
   height: 9px;
 }
 
-*::-webkit-scrollbar-thumb {
+.scroll-quiet::-webkit-scrollbar-thumb {
   background-color: var(--c-rule-strong);
   border: 3px solid transparent;
   background-clip: content-box;

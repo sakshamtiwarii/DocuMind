@@ -1,7 +1,8 @@
+import { useState } from "react";
 import clsx from "clsx";
 import Wordmark from "./Wordmark";
 import { shortenFilename } from "../lib/format";
-import { IconClose, IconPlus, IconTrash } from "./icons";
+import { IconClose, IconPen, IconPlus, IconTrash } from "./icons";
 
 const DAY_MS = 86400000;
 
@@ -49,8 +50,23 @@ export default function Sidebar({
   onSelect,
   onNew,
   onDelete,
+  onRename,
   onClose,
 }) {
+  const [renamingId, setRenamingId] = useState(null);
+  const [draft, setDraft] = useState("");
+
+  function startRename(conversation) {
+    setRenamingId(conversation.id);
+    setDraft(conversation.title ?? "");
+  }
+
+  function commitRename() {
+    const next = draft.trim();
+    if (next) onRename(renamingId, next);
+    setRenamingId(null);
+  }
+
   const grouped = BUCKET_ORDER.map((bucket) => ({
     bucket,
     items: conversations.filter((c) => bucketOf(c.updated_at) === bucket),
@@ -87,6 +103,7 @@ export default function Sidebar({
           <button
             type="button"
             onClick={onNew}
+            aria-label="Start a new conversation"
             className="flex w-full items-center gap-2 rounded-[3px] border border-rule-strong px-3 py-2 text-[0.8125rem] text-ink transition-colors hover:border-clay hover:text-clay"
           >
             <IconPlus size={14} />
@@ -94,7 +111,7 @@ export default function Sidebar({
           </button>
         </div>
 
-        <div className="mt-6 flex-1 overflow-y-auto overscroll-contain pb-6">
+        <div className="scroll-quiet mt-6 flex-1 overflow-y-auto overscroll-contain pb-6">
           {isLoading && (
             <div className="space-y-3 px-5">
               {[0, 1, 2].map((i) => (
@@ -122,41 +139,89 @@ export default function Sidebar({
                     return (
                       <li key={c.id}>
                         <div
-                          onClick={() => onSelect(c.id)}
+                          onDoubleClick={() => startRename(c)}
                           className={clsx(
-                            "group relative flex cursor-pointer items-start gap-2 border-l-2 py-2 pl-[1.125rem] pr-4 transition-colors",
+                            "group relative flex items-start gap-1.5 border-l-2 py-2 pl-[1.125rem] pr-3 transition-colors",
                             isActive
                               ? "border-clay bg-paper"
-                              : "border-transparent hover:bg-paper/60"
+                              : "border-transparent hover:bg-paper/60 focus-within:bg-paper/60"
                           )}
                         >
-                          <div className="min-w-0 flex-1">
-                            <p
-                              className={clsx(
-                                "truncate text-[0.8125rem] leading-snug",
-                                isActive ? "text-ink" : "text-muted group-hover:text-ink"
-                              )}
+                          {renamingId === c.id ? (
+                            <div className="min-w-0 flex-1">
+                              <input
+                                autoFocus
+                                value={draft}
+                                onChange={(e) => setDraft(e.target.value)}
+                                onBlur={commitRename}
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    e.preventDefault();
+                                    commitRename();
+                                  } else if (e.key === "Escape") {
+                                    setRenamingId(null);
+                                  }
+                                }}
+                                maxLength={120}
+                                aria-label="Conversation title"
+                                className="w-full rounded-[2px] border border-clay bg-raised px-1.5 py-0.5 text-[0.8125rem] text-ink outline-none"
+                              />
+                              <p className="mt-0.5 truncate text-[0.6875rem] text-faint">
+                                {subtitleOf(c.documents)} · {formatTime(c.updated_at)}
+                              </p>
+                            </div>
+                          ) : (
+                            /* A real button, so conversations are reachable and openable by
+                               keyboard — not just their rename/delete controls. */
+                            <button
+                              type="button"
+                              onClick={() => onSelect(c.id)}
+                              aria-current={isActive ? "true" : undefined}
+                              className="min-w-0 flex-1 cursor-pointer text-left"
                             >
-                              {c.title ?? "New conversation"}
-                            </p>
-                            <p className="mt-0.5 truncate text-[0.6875rem] text-faint">
-                              {subtitleOf(c.documents)} · {formatTime(c.updated_at)}
-                            </p>
-                          </div>
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              const label = c.title ?? "this conversation";
-                              if (window.confirm(`Delete "${label}"? This can't be undone.`)) {
-                                onDelete(c.id);
-                              }
-                            }}
-                            className="mt-0.5 shrink-0 p-0.5 text-faint opacity-0 transition-opacity hover:text-oxblood focus-visible:opacity-100 group-hover:opacity-100"
-                            aria-label={`Delete ${c.title ?? "conversation"}`}
-                          >
-                            <IconTrash size={14} />
-                          </button>
+                              <span
+                                className={clsx(
+                                  "block truncate text-[0.8125rem] leading-snug",
+                                  isActive ? "text-ink" : "text-muted group-hover:text-ink"
+                                )}
+                              >
+                                {c.title || "New conversation"}
+                              </span>
+                              <span className="mt-0.5 block truncate text-[0.6875rem] text-faint">
+                                {subtitleOf(c.documents)} · {formatTime(c.updated_at)}
+                              </span>
+                            </button>
+                          )}
+
+                          {renamingId !== c.id && (
+                            <div className="mt-0.5 flex shrink-0 items-center gap-0.5 opacity-0 transition-opacity focus-within:opacity-100 group-hover:opacity-100">
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  startRename(c);
+                                }}
+                                className="p-0.5 text-faint transition-colors hover:text-clay"
+                                aria-label={`Rename ${c.title || "conversation"}`}
+                              >
+                                <IconPen size={13} />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  const label = c.title || "this conversation";
+                                  if (window.confirm(`Delete "${label}"? This can't be undone.`)) {
+                                    onDelete(c.id);
+                                  }
+                                }}
+                                className="p-0.5 text-faint transition-colors hover:text-oxblood"
+                                aria-label={`Delete ${c.title || "conversation"}`}
+                              >
+                                <IconTrash size={13} />
+                              </button>
+                            </div>
+                          )}
                         </div>
                       </li>
                     );

@@ -29,6 +29,12 @@ async def ask(payload: AskRequest):
     """
     Ask a question grounded in the documents attached to this conversation.
     """
+    # min_length on the schema still lets " " through, which would bill an LLM call, store a
+    # blank turn in the history that every later answer sees, and title the conversation "".
+    question = payload.question.strip()
+    if not question:
+        raise HTTPException(status_code=422, detail="Question cannot be blank")
+
     db = SessionLocal()
     try:
         try:
@@ -61,13 +67,13 @@ async def ask(payload: AskRequest):
         chat_history = [{"role": m.role, "content": m.content} for m in prior_messages]
 
         try:
-            result = answer_question(payload.question, ready_document_ids, chat_history, document_filenames)
+            result = answer_question(question, ready_document_ids, chat_history, document_filenames)
         except (ResponseHandlingException, UnexpectedResponse) as e:
             raise HTTPException(status_code=503, detail="Vector database is unreachable") from e
         except OpenAIError as e:
             raise HTTPException(status_code=502, detail="Upstream OpenAI API error") from e
 
-        db.add(Message(session_id=payload.session_id, role="user", content=payload.question))
+        db.add(Message(session_id=payload.session_id, role="user", content=question))
         db.add(Message(
             session_id=payload.session_id,
             role="assistant",
@@ -78,7 +84,7 @@ async def ask(payload: AskRequest):
         # Name the conversation after the question that started it — filenames repeat across
         # conversations and make the sidebar unreadable.
         if not session.title:
-            session.title = _title_from_question(payload.question)
+            session.title = _title_from_question(question)
 
         db.commit()
     finally:

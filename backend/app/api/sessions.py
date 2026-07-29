@@ -1,10 +1,10 @@
 from fastapi import APIRouter, HTTPException
 from sqlalchemy import func
-from sqlalchemy.exc import DataError
+from sqlalchemy.exc import DataError, IntegrityError
 
 from app.db.postgres import SessionLocal
 from app.models import ChatSession, Document, Message, SessionDocument
-from app.schemas.schemas import AttachDocumentRequest
+from app.schemas.schemas import AttachDocumentRequest, RenameSessionRequest
 
 router = APIRouter()
 
@@ -158,9 +158,75 @@ async def attach_document(session_id: str, payload: AttachDocumentRequest):
         )
         if not already_attached:
             db.add(SessionDocument(session_id=session_id, document_id=payload.document_id))
-            db.commit()
+            try:
+                db.commit()
+            except IntegrityError:
+                # The existence check above is check-then-act; a concurrent attach of the same
+                # document trips the unique constraint. Same end state, so not an error.
+                db.rollback()
 
         return {"documents": _document_summaries(db, session_id)}
+    finally:
+        db.close()
+
+
+@router.patch("/sessions/{session_id}")
+async def rename_session(session_id: str, payload: RenameSessionRequest):
+    """
+    Rename a conversation. Overrides the title derived from the first question.
+    """
+    title = " ".join(payload.title.split())
+    if not title:
+        raise HTTPException(status_code=422, detail="Title cannot be blank")
+
+    db = SessionLocal()
+    try:
+        try:
+            session = db.query(ChatSession).filter(ChatSession.id == session_id).first()
+        except DataError:
+            raise HTTPException(status_code=400, detail="Invalid session_id format")
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        session.title = title
+        db.commit()
+        return {"id": str(session.id), "title": session.title}
+    finally:
+        db.close()
+
+
+@router.delete("/sessions/{session_id}/documents/{document_id}", status_code=204)
+async def detach_document(session_id: str, document_id: str):
+    """
+    Remove a document from a conversation, so it stops being searched for answers. The
+    document row itself is kept — it may be attached to other conversations, and its chunks
+    stay in Qdrant either way.
+    """
+    db = SessionLocal()
+    try:
+        try:
+            session = db.query(ChatSession).filter(ChatSession.id == session_id).first()
+        except DataError:
+            raise HTTPException(status_code=400, detail="Invalid session_id format")
+        if not session:
+            raise HTTPException(status_code=404, detail="Session not found")
+
+        try:
+            removed = (
+                db.query(SessionDocument)
+                .filter(
+                    SessionDocument.session_id == session_id,
+                    SessionDocument.document_id == document_id,
+                )
+                .delete()
+            )
+        except DataError:
+            raise HTTPException(status_code=400, detail="Invalid document_id format")
+
+        if not removed:
+            raise HTTPException(status_code=404, detail="Document is not attached to this conversation")
+
+        db.commit()
     finally:
         db.close()
 

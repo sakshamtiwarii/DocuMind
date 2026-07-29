@@ -4,9 +4,11 @@ import {
   attachDocument,
   createSession,
   deleteSession,
+  detachDocument,
   getDocumentStatus,
   getSession,
   listSessions,
+  renameSession,
   uploadDocument,
 } from "../api/client";
 
@@ -27,6 +29,23 @@ export function useConversations() {
   const [isUploading, setIsUploading] = useState(false);
   const [error, setError] = useState(null);
   const activeIdRef = useRef(null);
+  const creatingRef = useRef(false);
+  const pollsRef = useRef(new Set());
+
+  // Document-status polls outlive the request that started them, so they have to be cleaned
+  // up explicitly — otherwise they keep firing after the app unmounts.
+  useEffect(
+    () => () => {
+      pollsRef.current.forEach((id) => clearInterval(id));
+      pollsRef.current.clear();
+    },
+    []
+  );
+
+  const stopPoll = useCallback((id) => {
+    clearInterval(id);
+    pollsRef.current.delete(id);
+  }, []);
 
   const refreshList = useCallback(async () => {
     try {
@@ -39,19 +58,21 @@ export function useConversations() {
     }
   }, []);
 
-  const loadConversation = useCallback(async (id) => {
+  /** `silent` refreshes in place — used after attaching/removing a document so the open
+   *  transcript isn't replaced by a loading state it doesn't need. */
+  const loadConversation = useCallback(async (id, { silent = false } = {}) => {
     activeIdRef.current = id;
-    setIsLoadingActive(true);
+    if (!silent) setIsLoadingActive(true);
     try {
       const detail = await getSession(id);
       if (activeIdRef.current === id) setActiveSession(detail);
     } catch (e) {
       if (activeIdRef.current === id) {
         setError(e.message);
-        setActiveSession(null);
+        if (!silent) setActiveSession(null);
       }
     } finally {
-      if (activeIdRef.current === id) setIsLoadingActive(false);
+      if (!silent && activeIdRef.current === id) setIsLoadingActive(false);
     }
   }, []);
 
@@ -78,6 +99,9 @@ export function useConversations() {
   }, [refreshList, selectConversation]);
 
   const createNewConversation = useCallback(async () => {
+    // Without this, impatient double-clicks each create their own empty conversation.
+    if (creatingRef.current) return;
+    creatingRef.current = true;
     setError(null);
     try {
       const { session_id } = await createSession();
@@ -85,6 +109,8 @@ export function useConversations() {
       selectConversation(session_id);
     } catch (e) {
       setError(e.message);
+    } finally {
+      creatingRef.current = false;
     }
   }, [refreshList, selectConversation]);
 
@@ -105,6 +131,43 @@ export function useConversations() {
       }
     },
     [refreshList]
+  );
+
+  const renameConversation = useCallback(
+    async (id, title) => {
+      const trimmed = title.trim();
+      if (!trimmed) return;
+
+      // Optimistic — a rename is trivially reversible, so don't make the user wait for it.
+      setConversations((prev) => prev.map((c) => (c.id === id ? { ...c, title: trimmed } : c)));
+      setActiveSession((prev) => (prev && prev.id === id ? { ...prev, title: trimmed } : prev));
+      try {
+        const updated = await renameSession(id, trimmed);
+        setConversations((prev) =>
+          prev.map((c) => (c.id === id ? { ...c, title: updated.title } : c))
+        );
+      } catch (e) {
+        setError(e.message);
+        refreshList();
+      }
+    },
+    [refreshList]
+  );
+
+  const removeDocument = useCallback(
+    async (documentId) => {
+      if (!activeId) return;
+      const targetId = activeId;
+      setError(null);
+      try {
+        await detachDocument(targetId, documentId);
+        await loadConversation(targetId, { silent: true });
+        refreshList();
+      } catch (e) {
+        setError(e.message);
+      }
+    },
+    [activeId, loadConversation, refreshList]
   );
 
   const sendMessage = useCallback(
@@ -171,7 +234,7 @@ export function useConversations() {
       try {
         const uploaded = await uploadDocument(file);
         await attachDocument(targetId, uploaded.document_id);
-        await loadConversation(targetId);
+        await loadConversation(targetId, { silent: true });
         refreshList();
 
         let consecutiveFailures = 0;
@@ -180,8 +243,10 @@ export function useConversations() {
             const status = await getDocumentStatus(uploaded.document_id);
             consecutiveFailures = 0;
             if (status.status !== "processing") {
-              clearInterval(poll);
-              if (activeIdRef.current === targetId) await loadConversation(targetId);
+              stopPoll(poll);
+              if (activeIdRef.current === targetId) {
+                await loadConversation(targetId, { silent: true });
+              }
               refreshList();
             }
           } catch {
@@ -190,18 +255,19 @@ export function useConversations() {
             // signals a real outage rather than one blip.
             consecutiveFailures += 1;
             if (consecutiveFailures >= MAX_CONSECUTIVE_POLL_FAILURES) {
-              clearInterval(poll);
+              stopPoll(poll);
               setError("Lost track of a document's processing status. Refresh to check on it.");
             }
           }
         }, POLL_INTERVAL_MS);
+        pollsRef.current.add(poll);
       } catch (e) {
         setError(e.message);
       } finally {
         setIsUploading(false);
       }
     },
-    [activeId, loadConversation, refreshList]
+    [activeId, loadConversation, refreshList, stopPoll]
   );
 
   // The list is refetched after every answer, and the backend names a conversation from its
@@ -222,8 +288,10 @@ export function useConversations() {
     selectConversation,
     createNewConversation,
     deleteConversation,
+    renameConversation,
     sendMessage,
     addDocument,
+    removeDocument,
     dismissError: () => setError(null),
   };
 }

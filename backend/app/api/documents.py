@@ -1,3 +1,4 @@
+import logging
 import shutil
 import tempfile
 from pathlib import Path
@@ -11,6 +12,8 @@ from app.core.ingestion import extract_pages
 from app.db.postgres import SessionLocal
 from app.models import Document
 
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
@@ -83,6 +86,10 @@ def process_document(document_id: str, file_path: str):
         document.page_count = len(pages)
         db.commit()
     except Exception:
+        # BackgroundTasks swallows exceptions, so without this the only trace of a failed
+        # ingestion is a document stuck at "failed" with no way to tell why.
+        logger.exception("Ingestion failed for document %s", document_id)
+        db.rollback()
         document = db.query(Document).filter(Document.id == document_id).first()
         if document:
             document.status = "failed"

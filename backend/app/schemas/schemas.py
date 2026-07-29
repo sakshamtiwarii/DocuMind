@@ -1,8 +1,8 @@
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 class AskRequest(BaseModel):
     session_id: str
-    question: str
+    question: str = Field(min_length=1, max_length=4000)
 
 
 class SourceChunk(BaseModel):
@@ -18,3 +18,7 @@ class AskResponse(BaseModel):
 
 class AttachDocumentRequest(BaseModel):
     document_id: str
+
+
+class RenameSessionRequest(BaseModel):
+    title: str = Field(min_length=1, max_length=120)

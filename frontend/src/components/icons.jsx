@@ -75,6 +75,16 @@ export function IconPage(props) {
   );
 }
 
+/** A nib, for renaming — drawn rather than a generic pencil. */
+export function IconPen(props) {
+  return (
+    <Glyph {...props}>
+      <path d="M13.2 3.9l2.9 2.9L7.4 15.5 4 16l.5-3.4z" />
+      <path d="M11.5 5.6l2.9 2.9" />
+    </Glyph>
+  );
+}
+
 export function IconArrowUp(props) {
   return (
     <Glyph {...props}>

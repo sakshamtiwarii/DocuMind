@@ -25,6 +25,49 @@ def test_ask_requires_question_field(client, ready_session):
     assert response.status_code == 422
 
 
+def test_ask_rejects_blank_questions(client, ready_session, mocker):
+    """A whitespace-only question would otherwise bill an LLM call, store an empty turn that
+    every later answer sees, and title the conversation ""."""
+    session_id, _ = ready_session
+    answer = mocker.patch("app.api.ask.answer_question")
+
+    for blank in ["", "   ", "\n\t "]:
+        response = client.post("/ask", json={"session_id": session_id, "question": blank})
+        assert response.status_code == 422, blank
+
+    answer.assert_not_called()
+
+    db = SessionLocal()
+    persisted = db.query(Message).filter(Message.session_id == session_id).count()
+    db.close()
+    assert persisted == 0
+
+
+def test_ask_strips_surrounding_whitespace_from_the_question(client, ready_session, mocker):
+    session_id, _ = ready_session
+    mocker.patch("app.api.ask.answer_question", return_value={"answer": "a", "sources": []})
+    try:
+        client.post("/ask", json={"session_id": session_id, "question": "  What is chunking?  "})
+
+        db = SessionLocal()
+        stored = (
+            db.query(Message)
+            .filter(Message.session_id == session_id, Message.role == "user")
+            .first()
+        )
+        session = db.query(ChatSession).filter(ChatSession.id == session_id).first()
+        content, title = stored.content, session.title
+        db.close()
+
+        assert content == "What is chunking?"
+        assert title == "What is chunking?"
+    finally:
+        db = SessionLocal()
+        db.query(Message).filter(Message.session_id == session_id).delete()
+        db.commit()
+        db.close()
+
+
 def test_ask_returns_404_for_unknown_session(client):
     response = client.post("/ask", json={
         "session_id": "11111111-1111-1111-1111-111111111111",

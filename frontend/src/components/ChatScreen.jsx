@@ -4,7 +4,7 @@ import DocumentChip from "./DocumentChip";
 import Dropzone from "./Dropzone";
 import Message from "./Message";
 import Spinner from "./Spinner";
-import { IconPanel, IconPlus } from "./icons";
+import { IconPanel, IconPen, IconPlus } from "./icons";
 
 const SUGGESTIONS = [
   "What is this document about?",
@@ -21,13 +21,18 @@ export default function ChatScreen({
   isUploading,
   onSend,
   onAddDocument,
+  onRemoveDocument,
+  onRename,
   onOpenSidebar,
 }) {
   const [input, setInput] = useState("");
+  const [draftTitle, setDraftTitle] = useState(null);
   const bottomRef = useRef(null);
   const fileInputRef = useRef(null);
 
   const hasReadyDocument = documents.some((d) => d.status === "ready");
+  const isIndexing = documents.some((d) => d.status === "processing");
+  const canSend = Boolean(input.trim()) && !isAsking && hasReadyDocument;
 
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -35,9 +40,15 @@ export default function ChatScreen({
 
   function handleSubmit(e) {
     e.preventDefault();
-    if (!input.trim() || isAsking || !hasReadyDocument) return;
+    if (!canSend) return;
     onSend(input);
     setInput("");
+  }
+
+  function commitRename() {
+    const next = (draftTitle ?? "").trim();
+    if (next && next !== title) onRename(next);
+    setDraftTitle(null);
   }
 
   if (isLoadingActive) {
@@ -61,9 +72,40 @@ export default function ChatScreen({
             <IconPanel size={18} />
           </button>
 
-          <h1 className="min-w-0 flex-1 truncate font-serif text-[1.0625rem] font-medium text-ink">
-            {title}
-          </h1>
+          {draftTitle === null ? (
+            <h1 className="group/title flex min-w-0 flex-1 items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setDraftTitle(title)}
+                title="Rename this conversation"
+                className="min-w-0 truncate font-serif text-[1.0625rem] font-medium text-ink transition-colors hover:text-clay"
+              >
+                {title}
+              </button>
+              <IconPen
+                size={13}
+                className="shrink-0 text-faint opacity-0 transition-opacity group-hover/title:opacity-100"
+              />
+            </h1>
+          ) : (
+            <input
+              autoFocus
+              value={draftTitle}
+              onChange={(e) => setDraftTitle(e.target.value)}
+              onBlur={commitRename}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") {
+                  e.preventDefault();
+                  commitRename();
+                } else if (e.key === "Escape") {
+                  setDraftTitle(null);
+                }
+              }}
+              maxLength={120}
+              aria-label="Conversation title"
+              className="min-w-0 flex-1 rounded-[3px] border border-clay bg-raised px-2 py-1 font-serif text-[1.0625rem] font-medium text-ink outline-none"
+            />
+          )}
 
           <input
             ref={fileInputRef}
@@ -80,28 +122,32 @@ export default function ChatScreen({
             type="button"
             onClick={() => fileInputRef.current?.click()}
             disabled={isUploading}
-            className="flex shrink-0 items-center gap-1.5 text-[0.8125rem] text-muted transition-colors hover:text-clay disabled:opacity-50"
+            className="flex shrink-0 items-center gap-1.5 rounded-[3px] border border-rule-strong px-2.5 py-1.5 text-[0.8125rem] text-ink transition-colors hover:border-clay hover:text-clay disabled:cursor-not-allowed disabled:border-rule disabled:text-faint"
           >
             {isUploading ? <Spinner className="size-3.5" /> : <IconPlus size={14} />}
-            Add PDF
+            {isUploading ? "Uploading…" : "Add PDF"}
           </button>
         </div>
 
         {documents.length > 0 && (
-          <div className="mt-3 flex flex-wrap items-center gap-x-5 gap-y-1.5">
+          <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
             {documents.map((d) => (
               <DocumentChip
                 key={d.id}
                 filename={d.filename}
                 status={d.status}
                 pageCount={d.page_count}
+                onRemove={() => onRemoveDocument(d.id)}
               />
             ))}
+            {isIndexing && (
+              <span className="label text-faint">answers may be incomplete until indexing ends</span>
+            )}
           </div>
         )}
       </header>
 
-      <div className="flex-1 overflow-y-auto overscroll-contain py-10">
+      <div className="scroll-quiet flex-1 overflow-y-auto overscroll-contain py-10">
         {documents.length === 0 && (
           <div className="pl-5">
             <p className="max-w-[40ch] font-serif text-[1.375rem] leading-snug text-ink">
@@ -171,8 +217,15 @@ export default function ChatScreen({
         <div ref={bottomRef} />
       </div>
 
-      <form onSubmit={handleSubmit} className="shrink-0 border-t border-rule py-4">
-        <div className="flex items-end gap-4">
+      <form onSubmit={handleSubmit} className="shrink-0 pb-6 pt-2">
+        <div
+          className={clsx(
+            "rounded-[4px] border bg-raised transition-colors",
+            hasReadyDocument
+              ? "border-rule-strong focus-within:border-clay"
+              : "border-rule"
+          )}
+        >
           <textarea
             value={input}
             onChange={(e) => setInput(e.target.value)}
@@ -185,30 +238,36 @@ export default function ChatScreen({
             disabled={!hasReadyDocument}
             placeholder={
               hasReadyDocument
-                ? "Ask a question…"
-                : "Add a PDF and let it finish indexing to start asking"
+                ? "Ask a question about these documents…"
+                : isIndexing
+                  ? "Indexing — one moment…"
+                  : "Add a PDF to start asking"
             }
             rows={1}
-            className="max-h-40 flex-1 resize-none bg-transparent font-serif text-[1.0625rem] leading-relaxed text-ink outline-none placeholder:text-faint disabled:cursor-not-allowed [field-sizing:content]"
+            className="block max-h-44 w-full resize-none bg-transparent px-4 pt-3.5 pb-1 font-serif text-[1.0625rem] leading-relaxed text-ink outline-none placeholder:text-faint disabled:cursor-not-allowed [field-sizing:content]"
           />
-          <button
-            type="submit"
-            disabled={!input.trim() || isAsking || !hasReadyDocument}
-            className={clsx(
-              "label shrink-0 pb-1 transition-colors",
-              !input.trim() || isAsking || !hasReadyDocument
-                ? "cursor-not-allowed text-faint"
-                : "text-clay hover:text-ink"
-            )}
-          >
-            Ask
-          </button>
+          <div className="flex items-center justify-between gap-4 px-4 pt-1 pb-3">
+            <p className="truncate text-[0.6875rem] text-faint">
+              {hasReadyDocument
+                ? "Enter to send · Shift + Enter for a new line"
+                : isIndexing
+                  ? "This usually takes a few seconds"
+                  : "Answers come only from the documents you attach"}
+            </p>
+            <button
+              type="submit"
+              disabled={!canSend}
+              className={clsx(
+                "label shrink-0 rounded-[3px] border px-3 py-1.5 transition-colors",
+                canSend
+                  ? "border-clay text-clay hover:bg-clay hover:text-paper"
+                  : "cursor-not-allowed border-rule text-faint"
+              )}
+            >
+              Ask
+            </button>
+          </div>
         </div>
-        {hasReadyDocument && (
-          <p className="mt-2 text-[0.6875rem] text-faint">
-            Enter to send · Shift + Enter for a new line
-          </p>
-        )}
       </form>
     </div>
   );
