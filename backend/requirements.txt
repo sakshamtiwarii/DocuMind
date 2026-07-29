@@ -1,0 +1,29 @@
+fastapi==0.115.0
+uvicorn[standard]==0.30.6
+python-dotenv==1.0.1
+pydantic==2.9.2
+pydantic-settings==2.5.2
+
+# RAG stack
+langchain==0.3.1
+langchain-community==0.3.1
+langchain-openai==0.2.0
+qdrant-client==1.11.2
+langchain-qdrant==0.1.4
+
+# PDF handling
+pypdf==5.0.1
+
+# metadata store: documents, sessions, chat history
+sqlalchemy==2.0.35
+psycopg2-binary==2.9.9
+
+# background jobs / rate limiting later
+redis==5.0.8
+
+# file uploads
+python-multipart==0.0.9
+
+# testing
+pytest==8.3.3
+pytest-mock==3.14.0
