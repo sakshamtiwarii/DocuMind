@@ -9,10 +9,8 @@ services:
       # containers reach each other by service name, not localhost.
       DATABASE_URL: postgresql://postgres:postgres@postgres:5432/ragdb
       QDRANT_URL: http://qdrant:6333
-      REDIS_URL: redis://redis:6379
     depends_on:
       - qdrant
-      - redis
       - postgres
 
   qdrant:
@@ -22,13 +20,6 @@ services:
       - "6334:6334"   # gRPC
     volumes:
       - qdrant_data:/qdrant/storage
-
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
 
   postgres:
     image: postgres:16
@@ -43,5 +34,4 @@ services:
 
 volumes:
   qdrant_data:
-  redis_data:
   pg_data:

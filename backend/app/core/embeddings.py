@@ -32,7 +32,11 @@ class LocalEmbeddings:
 
 
 embeddings = LocalEmbeddings(settings.embedding_model)
-qdrant = QdrantClient(url=settings.qdrant_url)
+
+# api_key is required by Qdrant Cloud and ignored by a local container, so the same call
+# covers both. This is the app's single Qdrant client — importing it elsewhere (including
+# /health) avoids opening a second connection pool per process.
+qdrant = QdrantClient(url=settings.qdrant_url, api_key=settings.qdrant_api_key)
 
 
 def ensure_collection() -> None:

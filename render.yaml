@@ -1,0 +1,40 @@
+# Render Blueprint — https://render.com/docs/blueprint-spec
+#
+# Deploys the FastAPI backend only. The frontend goes to Vercel, Postgres to Neon and vectors
+# to Qdrant Cloud, so the values marked `sync: false` are filled in from the Render dashboard
+# (they're secrets and must not live in the repo).
+services:
+  - type: web
+    name: documind-api
+    runtime: docker
+    plan: free
+    rootDir: backend
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    autoDeploy: true
+    envVars:
+      - key: ENVIRONMENT
+        value: production
+
+      # Neon connection string. Use the *pooled* host and keep ?sslmode=require.
+      - key: DATABASE_URL
+        sync: false
+
+      # Qdrant Cloud cluster URL (https://….cloud.qdrant.io:6333) and its API key.
+      - key: QDRANT_URL
+        sync: false
+      - key: QDRANT_API_KEY
+        sync: false
+
+      # Comma-separated exact origins allowed to call this API — your Vercel production URL
+      # (and a custom domain if you add one). Set after the first Vercel deploy.
+      - key: CORS_ORIGINS
+        sync: false
+
+      # Vercel gives every preview deploy its own hostname, so they can't be enumerated.
+      # Replace <project> with your Vercel project name, or delete to block previews.
+      - key: CORS_ORIGIN_REGEX
+        value: ^https://documind-.*\.vercel\.app$
+
+      - key: MAX_UPLOAD_MB
+        value: "10"

@@ -1,10 +1,11 @@
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, Depends, HTTPException
 from openai import AuthenticationError, OpenAIError, RateLimitError
 from qdrant_client.http.exceptions import ResponseHandlingException, UnexpectedResponse
 from sqlalchemy.exc import DataError
 
 from app.schemas.schemas import AskRequest, AskResponse
 from app.core.chain import answer_question
+from app.core.limits import limit_asks
 from app.db.postgres import SessionLocal
 from app.models import ChatSession, Document, Message, SessionDocument
 
@@ -24,7 +25,7 @@ def _title_from_question(question: str) -> str:
     return f"{trimmed or cleaned[:TITLE_MAX_LENGTH]}…"
 
 
-@router.post("/ask", response_model=AskResponse)
+@router.post("/ask", response_model=AskResponse, dependencies=[Depends(limit_asks)])
 async def ask(payload: AskRequest):
     """
     Ask a question grounded in the documents attached to this conversation.

@@ -10,7 +10,7 @@ document, the system says so instead of guessing.
 per-request (OpenAI or Groq); this backend never stores or logs it, and doesn't work without
 one being sent on `/ask`.
 
-**Stack:** FastAPI · LangChain · Qdrant · fastembed (local embeddings) · OpenAI / Groq (chat, caller-supplied key) · PostgreSQL · Redis · Docker
+**Stack:** FastAPI · LangChain · Qdrant · fastembed (local embeddings) · OpenAI / Groq (chat, caller-supplied key) · PostgreSQL · Docker
 
 ## Architecture
 
@@ -40,7 +40,7 @@ several PDFs and a document can be detached without deleting it.
    ```bash
    cp .env.example .env
    ```
-2. Bring up the full stack (API + Qdrant + Postgres + Redis):
+2. Bring up the full stack (API + Qdrant + Postgres):
    ```bash
    docker compose up -d --build
    ```
@@ -64,7 +64,7 @@ Useful for active development (faster reload loop):
 python3.11 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
-docker compose up -d qdrant redis postgres   # just the infra, not the api container
+docker compose up -d qdrant postgres   # just the infra, not the api container
 uvicorn app.main:app --reload --port 8000
 ```
 `fastembed` downloads its model weights on first use and caches them locally — the first
@@ -127,7 +127,7 @@ failure; `503` Qdrant unreachable.
 Requires the infra containers running (tests hit real Postgres; Qdrant calls are real,
 provider chat calls are mocked so the suite needs no real API key and costs nothing):
 ```bash
-docker compose up -d qdrant redis postgres
+docker compose up -d qdrant postgres
 pytest tests/ -v
 ```
 
@@ -140,7 +140,8 @@ backend/
 │   ├── config.py            # env-driven settings (no LLM key — see app/core/chain.py)
 │   ├── api/                 # routes: documents.py, ask.py, sessions.py
 │   ├── core/                # RAG pipeline: ingestion, chunking, embeddings (local/fastembed),
-│   │                        #   retriever, prompts, chain (builds OpenAI/Groq client per request)
+│   │                        #   retriever, prompts, chain (builds OpenAI/Groq client per request),
+│   │                        #   limits.py (per-IP rate limiting)
 │   ├── db/postgres.py       # SQLAlchemy engine/session
 │   ├── models/               # Document, ChatSession, SessionDocument, Message ORM models
 │   └── schemas/schemas.py   # Pydantic request/response models
@@ -149,3 +150,30 @@ backend/
 ├── docker-compose.yml
 └── requirements.txt
 ```
+
+## Configuration
+
+All settings are env vars with local-dev defaults — see [.env.example](.env.example).
+Nothing about the deployment target is hardcoded.
+
+| Variable | Default | Notes |
+|---|---|---|
+| `ENVIRONMENT` | `development` | `production` makes `/health` report status only, without echoing connection errors (they carry DSN host/user detail) |
+| `DATABASE_URL` | local Postgres | Managed Postgres needs `?sslmode=require` |
+| `QDRANT_URL` | `http://localhost:6333` | Qdrant Cloud uses an `https://…:6333` cluster URL |
+| `QDRANT_API_KEY` | unset | Required by Qdrant Cloud; ignored by a local container |
+| `CORS_ORIGINS` | localhost 5173/3000 | Comma-separated exact origins allowed to call the API |
+| `CORS_ORIGIN_REGEX` | unset | For origins that can't be listed up front, e.g. Vercel preview deploys |
+| `MAX_UPLOAD_MB` | `10` | Oversized uploads are rejected mid-stream with 413 |
+| `UPLOAD_RATE_LIMIT` / `ASK_RATE_LIMIT` | `10` / `30` | Per IP, per `RATE_LIMIT_WINDOW_SECONDS` (default 60) |
+| `PROCESSING_TIMEOUT_MINUTES` | `10` | A document still "processing" after this is reported failed — the worker died mid-ingestion |
+| `EMBEDDING_MODEL` | `BAAI/bge-small-en-v1.5` | Changing this changes the vector size; the existing Qdrant collection must be recreated |
+| `CHUNK_SIZE` / `CHUNK_OVERLAP` / `TOP_K` | `1000` / `200` / `4` | Retrieval tuning |
+
+There is no LLM API key here by design — callers supply their own with each `/ask`.
+
+## Deployment
+
+See [../DEPLOYMENT.md](../DEPLOYMENT.md). The image binds `$PORT` (hosts assign it at
+runtime), runs as a non-root user, and bakes the embedding model in at build time so cold
+starts don't re-download it.

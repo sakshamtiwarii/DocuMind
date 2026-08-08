@@ -16,7 +16,7 @@ Document embeddings run locally on the backend (via `fastembed`), so uploading a
 PDFs costs nothing and needs no key — a key is only required once you start asking
 questions.
 
-**Stack:** FastAPI · LangChain · Qdrant · fastembed (local embeddings) · OpenAI / Groq (chat, user-supplied key) · PostgreSQL · Redis · Docker · React (Vite) · Tailwind CSS
+**Stack:** FastAPI · LangChain · Qdrant · fastembed (local embeddings) · OpenAI / Groq (chat, user-supplied key) · PostgreSQL · Docker · React (Vite) · Tailwind CSS
 
 ## Features
 
@@ -50,12 +50,12 @@ questions.
 ┌─────────────┐                             │
 │ OpenAI/Groq │ ◀───────────────────────────┘  (chat completions, user's own key)
 └─────────────┘
-                     ┌──────────────────────┼──────────────────────┐
-                     ▼                      ▼                      ▼
-              ┌─────────────┐       ┌──────────────┐        ┌───────────┐
-              │   Qdrant    │       │  PostgreSQL  │        │   Redis   │
-              │  (vectors)  │       │ (docs/chats) │        │  (jobs)   │
-              └─────────────┘       └──────────────┘        └───────────┘
+                     ┌──────────────────────┴──────────────────────┐
+                     ▼                                             ▼
+              ┌─────────────┐                             ┌──────────────┐
+              │   Qdrant    │                             │  PostgreSQL  │
+              │  (vectors)  │                             │ (docs/chats) │
+              └─────────────┘                             └──────────────┘
                      ▲
                      │
               fastembed — local embedding model, runs in the backend process
@@ -108,7 +108,7 @@ DocuMind/
 **Prerequisites:** Docker, Node.js. No API key needed to set up the backend — you'll
 connect one (OpenAI or Groq) from the browser on first run.
 
-1. **Backend** — bring up the API + Qdrant + Postgres + Redis:
+1. **Backend** — bring up the API + Qdrant + Postgres:
    ```bash
    cd backend
    cp .env.example .env
@@ -136,7 +136,7 @@ API reference, and error-response details.
 ```bash
 # backend (needs the infra containers up; provider calls are mocked in tests)
 cd backend
-docker compose up -d qdrant redis postgres
+docker compose up -d qdrant postgres
 pytest tests/ -v
 
 # frontend
@@ -145,9 +145,30 @@ npm run lint
 npm run build
 ```
 
+## Deployment
+
+Production runs as a split deploy — see **[DEPLOYMENT.md](DEPLOYMENT.md)** for the
+step-by-step runbook.
+
+| Piece | Host | Notes |
+|---|---|---|
+| Frontend | Vercel | Static Vite build; `VITE_API_URL` is inlined at build time |
+| API | Render (Docker) | Free tier sleeps when idle — first request after ~15 min is slow |
+| Postgres | Neon | Pooled connection string, `?sslmode=require` |
+| Vectors | Qdrant Cloud | Free 1 GB cluster, 384-dim collection |
+
+The API can't run on Vercel: ingestion continues in a background task *after* the HTTP
+response returns, which serverless functions don't allow, and the image carries a local
+embedding model. [`render.yaml`](render.yaml) and
+[`frontend/vercel.json`](frontend/vercel.json) hold the deploy config.
+
+Because the API is public and unauthenticated by design, production adds env-driven CORS,
+a 10 MB upload cap, per-IP rate limiting on `/documents` and `/ask`, and a `/health` endpoint
+that reports status without echoing connection errors.
+
 ## Status
 
-Core product is feature-complete and verified end-to-end (connect a key → upload →
-multi-document conversations → grounded, cited, multi-turn chat → rename/detach/delete)
-against the real local stack. Not yet done: a hosted deploy and a demo asset — both
-deliberately left open since they depend on account/hosting choices.
+Feature-complete and verified end-to-end (connect a key → upload → multi-document
+conversations → grounded, cited, multi-turn chat → rename/detach/delete) against the real
+local stack, with 45 backend tests passing. Deployment config and runbook are in place and
+verified against a production-shaped container run; the live URLs go here once deployed.

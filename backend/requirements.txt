@@ -19,9 +19,6 @@ pypdf==5.0.1
 sqlalchemy==2.0.35
 psycopg2-binary==2.9.9
 
-# background jobs / rate limiting later
-redis==5.0.8
-
 # file uploads
 python-multipart==0.0.9
 
