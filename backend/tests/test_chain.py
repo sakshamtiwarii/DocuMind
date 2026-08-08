@@ -25,6 +25,8 @@ def test_answer_question_labels_context_and_sources_by_filename(mocker):
     result = answer_question(
         "what's on page 3?",
         ["doc-a", "doc-b"],
+        "openai",
+        "test-key",
         chat_history=None,
         document_filenames={"doc-a": "alpha.pdf", "doc-b": "beta.pdf"},
     )
@@ -51,6 +53,6 @@ def test_answer_question_falls_back_without_filenames(mocker):
     )
     mocker.patch("app.core.chain.ChatOpenAI.invoke", return_value=SimpleNamespace(content="answer"))
 
-    result = answer_question("a question", ["doc-a"])
+    result = answer_question("a question", ["doc-a"], "openai", "test-key")
 
     assert result["sources"] == [{"page_number": 5, "chunk_text": "Some content", "filename": None}]

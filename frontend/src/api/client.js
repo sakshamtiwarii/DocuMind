@@ -1,3 +1,5 @@
+import { getApiKeyConfig } from "../lib/apiKey";
+
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:8000";
 
 export class AppError extends Error {
@@ -10,9 +12,11 @@ export class AppError extends Error {
 
 const STATUS_MESSAGES = {
   400: "That request wasn't valid.",
+  401: "Your API key was rejected. Check it in Settings.",
   404: "Not found — it may have been removed.",
   409: "The document is still being processed. Hang tight.",
   422: "This document failed to process. Please re-upload it.",
+  429: "The provider rate-limited that request. Try again shortly.",
   502: "The AI service is having trouble. Try again in a moment.",
   503: "The vector database is unreachable. Try again in a moment.",
 };
@@ -89,5 +93,15 @@ export function deleteSession(sessionId) {
 }
 
 export function askQuestion(sessionId, question) {
-  return json("/ask", { session_id: sessionId, question });
+  const config = getApiKeyConfig();
+  if (!config) {
+    throw new AppError("No API key connected. Add one in Settings before asking a question.", 0);
+  }
+  return json("/ask", {
+    session_id: sessionId,
+    question,
+    provider: config.provider,
+    api_key: config.apiKey,
+    model: config.model || undefined,
+  });
 }

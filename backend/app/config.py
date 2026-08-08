@@ -8,15 +8,11 @@ load_dotenv()
 
 
 class Settings(BaseSettings):
-    # OpenAI
-    openai_api_key: str = ""
+    # Chat model key + provider are supplied per-request by the user (see AskRequest) —
+    # this app never holds a server-side LLM key.
 
-    #chat model
-    chat_model: str = "gpt-4o-mini"
-
-
-    #embeddings model
-    embedding_model: str = "text-embedding-3-small"
+    # Embeddings model (local, via fastembed — no API key required)
+    embedding_model: str = "BAAI/bge-small-en-v1.5"
 
     # Qdrant
     qdrant_url: str = "http://localhost:6333"

@@ -1,4 +1,6 @@
 import { useState } from "react";
+import ApiKeyForm from "./components/ApiKeyForm";
+import ApiKeySettings from "./components/ApiKeySettings";
 import ChatScreen from "./components/ChatScreen";
 import ErrorBanner from "./components/ErrorBanner";
 import Sidebar from "./components/Sidebar";
@@ -6,8 +8,12 @@ import Spinner from "./components/Spinner";
 import Wordmark from "./components/Wordmark";
 import { IconPanel, IconPlus } from "./components/icons";
 import { useConversations } from "./hooks/useConversations";
+import { clearApiKeyConfig, getApiKeyConfig, saveApiKeyConfig } from "./lib/apiKey";
 
 export default function App() {
+  const [apiKeyConfig, setApiKeyConfig] = useState(() => getApiKeyConfig());
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+
   const {
     conversations,
     isLoadingList,
@@ -30,6 +36,36 @@ export default function App() {
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
 
+  function handleSaveApiKey(config) {
+    setApiKeyConfig(saveApiKeyConfig(config));
+    setIsSettingsOpen(false);
+  }
+
+  function handleRemoveApiKey() {
+    clearApiKeyConfig();
+    setApiKeyConfig(null);
+    setIsSettingsOpen(false);
+  }
+
+  // No key yet — nothing else in the app can work without one, so this replaces the whole
+  // shell rather than gating just the composer.
+  if (!apiKeyConfig) {
+    return (
+      <div className="flex h-screen items-center justify-center bg-paper px-8">
+        <div className="w-full max-w-[26rem]">
+          <Wordmark className="text-[2rem]" />
+          <p className="mt-5 max-w-[40ch] font-serif text-[1.1875rem] leading-relaxed text-muted">
+            Connect an API key to start. Every answer is generated with your own key, sent
+            straight to the provider you choose — this app never holds one itself.
+          </p>
+          <div className="mt-8">
+            <ApiKeyForm onSave={handleSaveApiKey} />
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="flex h-screen overflow-hidden bg-paper">
       <Sidebar
@@ -48,6 +84,8 @@ export default function App() {
         onDelete={deleteConversation}
         onRename={renameConversation}
         onClose={() => setIsSidebarOpen(false)}
+        onOpenSettings={() => setIsSettingsOpen(true)}
+        apiKeyProvider={apiKeyConfig.provider}
       />
 
       <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
@@ -111,6 +149,15 @@ export default function App() {
           />
         )}
       </div>
+
+      {isSettingsOpen && (
+        <ApiKeySettings
+          config={apiKeyConfig}
+          onSave={handleSaveApiKey}
+          onRemove={handleRemoveApiKey}
+          onClose={() => setIsSettingsOpen(false)}
+        />
+      )}
     </div>
   );
 }

@@ -103,7 +103,10 @@ def test_detach_document_stops_it_being_used(client, empty_session, ready_docume
     assert client.get(f"/sessions/{empty_session}").json()["documents"] == []
 
     # With nothing attached, asking is refused again rather than answering from a stale doc.
-    ask = client.post("/ask", json={"session_id": empty_session, "question": "test?"})
+    ask = client.post(
+        "/ask",
+        json={"session_id": empty_session, "question": "test?", "provider": "openai", "api_key": "test-key"},
+    )
     assert ask.status_code == 400
 
     # Detaching something that isn't attached is a 404, not a silent success.

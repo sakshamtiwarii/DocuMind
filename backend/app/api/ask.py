@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException
-from openai import OpenAIError
+from openai import AuthenticationError, OpenAIError, RateLimitError
 from qdrant_client.http.exceptions import ResponseHandlingException, UnexpectedResponse
 from sqlalchemy.exc import DataError
 
@@ -67,11 +67,31 @@ async def ask(payload: AskRequest):
         chat_history = [{"role": m.role, "content": m.content} for m in prior_messages]
 
         try:
-            result = answer_question(question, ready_document_ids, chat_history, document_filenames)
+            result = answer_question(
+                question,
+                ready_document_ids,
+                payload.provider,
+                payload.api_key,
+                chat_history,
+                document_filenames,
+                payload.model,
+            )
         except (ResponseHandlingException, UnexpectedResponse) as e:
             raise HTTPException(status_code=503, detail="Vector database is unreachable") from e
+        except AuthenticationError as e:
+            raise HTTPException(
+                status_code=401,
+                detail=f"That {payload.provider} API key was rejected. Check it and try again.",
+            ) from e
+        except RateLimitError as e:
+            raise HTTPException(
+                status_code=429,
+                detail=f"{payload.provider} rate-limited that request. Try again shortly.",
+            ) from e
         except OpenAIError as e:
-            raise HTTPException(status_code=502, detail="Upstream OpenAI API error") from e
+            raise HTTPException(
+                status_code=502, detail=f"Upstream {payload.provider} API error"
+            ) from e
 
         db.add(Message(session_id=payload.session_id, role="user", content=question))
         db.add(Message(

@@ -1,6 +1,6 @@
 import uuid
 
-from langchain_openai import OpenAIEmbeddings
+from fastembed import TextEmbedding
 from qdrant_client import QdrantClient
 from qdrant_client.http.exceptions import UnexpectedResponse
 from qdrant_client.models import Distance, PointStruct, VectorParams
@@ -8,7 +8,30 @@ from qdrant_client.models import Distance, PointStruct, VectorParams
 from app.config import settings
 
 
-embeddings = OpenAIEmbeddings(model=settings.embedding_model, openai_api_key=settings.openai_api_key)
+# Embeddings run locally (no API key, no per-request cost) so that the only key a user ever
+# has to provide is the one for the chat model — see app/core/chain.py. The chosen model's
+# vector size (384) is baked into the collection config below.
+#
+# langchain_community.embeddings.FastEmbedEmbeddings wraps the same fastembed model but never
+# actually populates its `_model` private attribute under this pydantic version (its pre_init
+# validator sets values["_model"], which pydantic v2 silently drops for underscore-prefixed
+# fields) — every call raises AttributeError: 'NoneType' object has no attribute 'embed'. Using
+# fastembed directly sidesteps that.
+EMBEDDING_VECTOR_SIZE = 384
+
+
+class LocalEmbeddings:
+    def __init__(self, model_name: str):
+        self._model = TextEmbedding(model_name=model_name)
+
+    def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        return [vector.tolist() for vector in self._model.embed(texts)]
+
+    def embed_query(self, text: str) -> list[float]:
+        return next(iter(self._model.embed([text]))).tolist()
+
+
+embeddings = LocalEmbeddings(settings.embedding_model)
 qdrant = QdrantClient(url=settings.qdrant_url)
 
 
@@ -27,7 +50,7 @@ def ensure_collection() -> None:
     try:
         qdrant.create_collection(
             collection_name=settings.qdrant_collection,
-            vectors_config=VectorParams(size=1536, distance=Distance.COSINE),
+            vectors_config=VectorParams(size=EMBEDDING_VECTOR_SIZE, distance=Distance.COSINE),
         )
     except (UnexpectedResponse, ValueError):
         # Lost the race — fine, as long as the collection is actually there now.

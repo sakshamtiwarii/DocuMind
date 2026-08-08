@@ -2,7 +2,9 @@ import { useState } from "react";
 import clsx from "clsx";
 import Wordmark from "./Wordmark";
 import { shortenFilename } from "../lib/format";
-import { IconClose, IconPen, IconPlus, IconTrash } from "./icons";
+import { IconClose, IconKey, IconPen, IconPlus, IconTrash } from "./icons";
+
+const PROVIDER_LABEL = { groq: "Groq", openai: "OpenAI" };
 
 const DAY_MS = 86400000;
 
@@ -52,6 +54,8 @@ export default function Sidebar({
   onDelete,
   onRename,
   onClose,
+  onOpenSettings,
+  apiKeyProvider,
 }) {
   const [renamingId, setRenamingId] = useState(null);
   const [draft, setDraft] = useState("");
@@ -229,6 +233,17 @@ export default function Sidebar({
                 </ul>
               </section>
             ))}
+        </div>
+
+        <div className="shrink-0 border-t border-rule px-4 py-4">
+          <button
+            type="button"
+            onClick={onOpenSettings}
+            className="flex w-full items-center gap-2 text-[0.8125rem] text-muted transition-colors hover:text-clay"
+          >
+            <IconKey size={14} />
+            {PROVIDER_LABEL[apiKeyProvider] ?? "API key"}
+          </button>
         </div>
       </aside>
     </>

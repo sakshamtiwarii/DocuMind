@@ -1,8 +1,13 @@
+from typing import Literal
+
 from pydantic import BaseModel, Field
 
 class AskRequest(BaseModel):
     session_id: str
     question: str = Field(min_length=1, max_length=4000)
+    provider: Literal["openai", "groq"]
+    api_key: str = Field(min_length=1)
+    model: str | None = None
 
 
 class SourceChunk(BaseModel):

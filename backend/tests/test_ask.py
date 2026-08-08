@@ -2,6 +2,9 @@ from app.api.ask import _title_from_question
 from app.db.postgres import SessionLocal
 from app.models import ChatSession, Message
 
+# Every /ask call now requires a provider + user-supplied key.
+AUTH = {"provider": "openai", "api_key": "test-key"}
+
 
 def test_title_from_question_keeps_short_questions_intact():
     assert _title_from_question("  What is  this document about? ") == "What is this document about?"
@@ -21,7 +24,7 @@ def test_title_from_question_truncates_on_a_word_boundary():
 
 def test_ask_requires_question_field(client, ready_session):
     session_id, _ = ready_session
-    response = client.post("/ask", json={"session_id": session_id})
+    response = client.post("/ask", json={"session_id": session_id, **AUTH})
     assert response.status_code == 422
 
 
@@ -32,7 +35,7 @@ def test_ask_rejects_blank_questions(client, ready_session, mocker):
     answer = mocker.patch("app.api.ask.answer_question")
 
     for blank in ["", "   ", "\n\t "]:
-        response = client.post("/ask", json={"session_id": session_id, "question": blank})
+        response = client.post("/ask", json={"session_id": session_id, "question": blank, **AUTH})
         assert response.status_code == 422, blank
 
     answer.assert_not_called()
@@ -47,7 +50,7 @@ def test_ask_strips_surrounding_whitespace_from_the_question(client, ready_sessi
     session_id, _ = ready_session
     mocker.patch("app.api.ask.answer_question", return_value={"answer": "a", "sources": []})
     try:
-        client.post("/ask", json={"session_id": session_id, "question": "  What is chunking?  "})
+        client.post("/ask", json={"session_id": session_id, "question": "  What is chunking?  ", **AUTH})
 
         db = SessionLocal()
         stored = (
@@ -72,6 +75,7 @@ def test_ask_returns_404_for_unknown_session(client):
     response = client.post("/ask", json={
         "session_id": "11111111-1111-1111-1111-111111111111",
         "question": "test?",
+        **AUTH,
     })
     assert response.status_code == 404
 
@@ -80,6 +84,7 @@ def test_ask_returns_400_when_no_documents_attached(client, empty_session):
     response = client.post("/ask", json={
         "session_id": empty_session,
         "question": "test?",
+        **AUTH,
     })
     assert response.status_code == 400
 
@@ -88,6 +93,7 @@ def test_ask_returns_400_when_only_processing_document_attached(client, processi
     response = client.post("/ask", json={
         "session_id": processing_session,
         "question": "test?",
+        **AUTH,
     })
     assert response.status_code == 400
 
@@ -96,6 +102,7 @@ def test_ask_returns_400_when_only_failed_document_attached(client, failed_sessi
     response = client.post("/ask", json={
         "session_id": failed_session,
         "question": "test?",
+        **AUTH,
     })
     assert response.status_code == 400
 
@@ -105,7 +112,7 @@ def test_ask_names_an_untitled_conversation_after_the_first_question(client, rea
     mocker.patch("app.api.ask.answer_question", return_value={"answer": "a", "sources": []})
 
     try:
-        client.post("/ask", json={"session_id": session_id, "question": "What is chunk overlap?"})
+        client.post("/ask", json={"session_id": session_id, "question": "What is chunk overlap?", **AUTH})
 
         db = SessionLocal()
         session = db.query(ChatSession).filter(ChatSession.id == session_id).first()
@@ -114,7 +121,7 @@ def test_ask_names_an_untitled_conversation_after_the_first_question(client, rea
         assert first_title == "What is chunk overlap?"
 
         # A later question must not rename an already-titled conversation.
-        client.post("/ask", json={"session_id": session_id, "question": "And the chunk size?"})
+        client.post("/ask", json={"session_id": session_id, "question": "And the chunk size?", **AUTH})
         db = SessionLocal()
         session = db.query(ChatSession).filter(ChatSession.id == session_id).first()
         second_title = session.title
@@ -137,6 +144,7 @@ def test_ask_returns_sources_and_persists_messages(client, ready_session, mocker
     response = client.post("/ask", json={
         "session_id": session_id,
         "question": "test?",
+        **AUTH,
     })
     try:
         assert response.status_code == 200

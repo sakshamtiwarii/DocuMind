@@ -92,3 +92,13 @@ export function IconArrowUp(props) {
     </Glyph>
   );
 }
+
+/** A bow-and-shaft key, for API key settings. */
+export function IconKey(props) {
+  return (
+    <Glyph {...props}>
+      <circle cx="6.5" cy="13.5" r="3" />
+      <path d="M8.7 11.3L15.5 4.5M12.3 7.7l2 2M14.3 5.7l2 2" />
+    </Glyph>
+  );
+}
